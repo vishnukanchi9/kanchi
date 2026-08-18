@@ -114,7 +114,7 @@ export const projects = [
     ],
     lab:
       "Page a service, acknowledge the incident, walk the timeline, and close it. The event log does not rewrite history.",
-    github: "https://github.com/vishnukanchi9/kanchi",
+    github: "https://github.com/vishnukanchi9/sentinel",
   },
 ] as const;
 
