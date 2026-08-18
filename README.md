@@ -1,5 +1,7 @@
 # KANCHI
 
+[![CI](https://github.com/vishnukanchi9/kanchi/actions/workflows/ci.yml/badge.svg)](https://github.com/vishnukanchi9/kanchi/actions/workflows/ci.yml)
+
 Engineering portfolio for [Vishnu Kanchi](https://github.com/vishnukanchi9) — backend and distributed systems.
 
 A print-ready resume plus three live labs that implement the same contracts as the standalone services:

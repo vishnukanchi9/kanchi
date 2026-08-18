@@ -78,9 +78,9 @@ const database = databaseUrl
 
 export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
 
-const grokOAuthPlugin = authConfigured
-  ? genericOAuth({
-      config: GROK_PROVIDERS.map(({ providerId, idp }) => ({
+const grokOAuthPlugin = genericOAuth({
+  config: authConfigured
+    ? GROK_PROVIDERS.map(({ providerId, idp }) => ({
         providerId,
         clientId: grokClientId as string,
         clientSecret: grokClientSecret as string,
@@ -89,9 +89,9 @@ const grokOAuthPlugin = authConfigured
         userInfoUrl: grokUserInfoUrl,
         scopes: ["openid", "profile", "email"],
         authorizationUrlParams: { idp, prompt: "login" },
-      })),
-    })
-  : null;
+      }))
+    : [],
+});
 
 export const auth = betterAuth({
   baseURL,
@@ -118,11 +118,7 @@ export const auth = betterAuth({
       dont_remember: { name: "__Host-grok-auth.dont_remember" },
     },
   },
-  plugins: [
-    ...(grokOAuthPlugin ? [grokOAuthPlugin] : []),
-    bearer(),
-    tanstackStartCookies(),
-  ],
+  plugins: [grokOAuthPlugin, bearer(), tanstackStartCookies()],
 });
 
 export function readSessionToken(): string | null {

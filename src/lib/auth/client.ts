@@ -1,6 +1,14 @@
-import { genericOAuthClient } from "better-auth/client/plugins";
+import type { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { createAuthClient } from "better-auth/react";
 import { GROK_PROVIDERS } from "./providers";
+
+// Better Auth exposes the generic OAuth server plugin publicly, but not its
+// client-side inference helper. The helper only supplies type metadata, so we
+// keep the tiny equivalent here without relying on a private package path.
+const genericOAuthClient = () => ({
+  id: "generic-oauth-client",
+  $InferServerPlugin: {} as ReturnType<typeof genericOAuth>,
+});
 
 export const authClient = createAuthClient({
   plugins: [genericOAuthClient()],
