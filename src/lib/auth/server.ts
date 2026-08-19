@@ -1,33 +1,32 @@
 /**
  * Self-hosted Better Auth for this app (server-only).
- * Optional OAuth: set GROK_AUTH_* / BETTER_AUTH_SECRET to enable sign-in.
- * Labs work without it — guests share owner_id `public`.
+ *
+ * Sign-in is optional and off by default. Point OAUTH_ISSUER at any OpenID
+ * Connect provider and set OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, and
+ * BETTER_AUTH_SECRET to enable it. Without them the labs run as a shared
+ * public workspace under owner_id `public`.
  */
 import { betterAuth } from "better-auth";
-import { bearer, genericOAuth } from "better-auth/plugins";
+import { genericOAuth } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled } from "./email-password";
-import { GROK_PROVIDERS } from "./providers";
+import { OAUTH_PROVIDER_ID } from "./providers";
 import { pgliteDialect } from "./pglite-dialect";
-import {
-  GROK_ISSUER_DEFAULT,
-  PREVIEW_ALLOWED_HOSTS,
-  PREVIEW_CLIENT_ID,
-  PREVIEW_CLIENT_SECRET,
-} from "./preview";
 
 void ensureDbReady();
 
 const globalAuthRef = globalThis as typeof globalThis & {
-  __grokAuthPreviewSecret__?: string;
+  __authDevSecret__?: string;
 };
-function previewAuthSecret(): string {
-  globalAuthRef.__grokAuthPreviewSecret__ ??= randomBytes(32).toString("hex");
-  return globalAuthRef.__grokAuthPreviewSecret__;
+
+/** Ephemeral secret so local dev boots without configuration. Never used in production. */
+function devAuthSecret(): string {
+  globalAuthRef.__authDevSecret__ ??= randomBytes(32).toString("hex");
+  return globalAuthRef.__authDevSecret__;
 }
 
 const env = (key: string): string | undefined => {
@@ -37,72 +36,66 @@ const env = (key: string): string | undefined => {
 
 const authDisabled = env("VITE_AUTH_ENABLED") === "false";
 
-const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
-const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
-const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
+const oauthIssuer = env("OAUTH_ISSUER");
+const oauthClientId = env("OAUTH_CLIENT_ID");
+const oauthClientSecret = env("OAUTH_CLIENT_SECRET");
 
 export const authConfigured =
-  !authDisabled && Boolean(grokClientId && grokClientSecret);
+  !authDisabled && Boolean(oauthIssuer && oauthClientId && oauthClientSecret);
 
 const explicitBaseURL = env("BETTER_AUTH_URL");
-const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
 const LOCAL_DEV_ORIGINS: string[] = [
   "http://localhost:8080",
   "http://127.0.0.1:8080",
   "http://[::1]:8080",
 ];
+
 const baseURL = explicitBaseURL ?? {
-  allowedHosts: [...previewAllowedHosts, "localhost", "127.0.0.1", "[::1]"],
+  allowedHosts: ["localhost", "127.0.0.1", "[::1]"],
   protocol: "auto" as const,
   fallback: "http://localhost:8080",
 };
 
 const trustedOrigins: string[] = explicitBaseURL
   ? [explicitBaseURL, ...LOCAL_DEV_ORIGINS]
-  : [
-      ...previewAllowedHosts,
-      ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
-      ...LOCAL_DEV_ORIGINS,
-    ];
+  : [...LOCAL_DEV_ORIGINS];
 
 const databaseUrl = env("DATABASE_URL");
-
-const issuerBase = grokIssuer.replace(/\/+$/, "");
-const grokAuthorizationUrl = `${issuerBase}/api/auth/oauth2/authorize`;
-const grokTokenUrl = `${issuerBase}/api/auth/oauth2/token`;
-const grokUserInfoUrl = `${issuerBase}/api/auth/oauth2/userinfo`;
 
 const database = databaseUrl
   ? new Pool({ connectionString: databaseUrl })
   : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
 
-export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
+export const SESSION_TOKEN_COOKIE = "__Host-kanchi.session_token";
 
-const grokOAuthPlugin = genericOAuth({
+/**
+ * Endpoints come from the provider's own discovery document rather than
+ * hard-coded paths, so any conformant OIDC issuer works unchanged.
+ */
+const oauthPlugin = genericOAuth({
   config: authConfigured
-    ? GROK_PROVIDERS.map(({ providerId, idp }) => ({
-        providerId,
-        clientId: grokClientId as string,
-        clientSecret: grokClientSecret as string,
-        authorizationUrl: grokAuthorizationUrl,
-        tokenUrl: grokTokenUrl,
-        userInfoUrl: grokUserInfoUrl,
-        scopes: ["openid", "profile", "email"],
-        authorizationUrlParams: { idp, prompt: "login" },
-      }))
+    ? [
+        {
+          providerId: OAUTH_PROVIDER_ID,
+          clientId: oauthClientId as string,
+          clientSecret: oauthClientSecret as string,
+          discoveryUrl: `${(oauthIssuer as string).replace(/\/+$/, "")}/.well-known/openid-configuration`,
+          scopes: ["openid", "profile", "email"],
+        },
+      ]
     : [],
 });
 
 export const auth = betterAuth({
   baseURL,
-  secret: env("BETTER_AUTH_SECRET") ?? previewAuthSecret(),
+  secret: env("BETTER_AUTH_SECRET") ?? devAuthSecret(),
   database,
   trustedOrigins,
   account: {
     encryptOAuthTokens: true,
     accountLinking: {
       enabled: true,
-      trustedProviders: GROK_PROVIDERS.map((p) => p.providerId),
+      trustedProviders: [OAUTH_PROVIDER_ID],
       requireLocalEmailVerified: false,
     },
   },
@@ -113,16 +106,16 @@ export const auth = betterAuth({
     defaultCookieAttributes: { secure: true, sameSite: "lax", path: "/" },
     cookies: {
       session_token: { name: SESSION_TOKEN_COOKIE },
-      session_data: { name: "__Host-grok-auth.session_data" },
-      account_data: { name: "__Host-grok-auth.account_data" },
-      dont_remember: { name: "__Host-grok-auth.dont_remember" },
+      session_data: { name: "__Host-kanchi.session_data" },
+      account_data: { name: "__Host-kanchi.account_data" },
+      dont_remember: { name: "__Host-kanchi.dont_remember" },
     },
   },
-  plugins: [grokOAuthPlugin, bearer(), tanstackStartCookies()],
+  plugins: [oauthPlugin, tanstackStartCookies()],
 });
 
 export function readSessionToken(): string | null {
   return getCookie(SESSION_TOKEN_COOKIE) ?? null;
 }
 
-export { GROK_PROVIDERS } from "./providers";
+export { OAUTH_PROVIDER_ID } from "./providers";

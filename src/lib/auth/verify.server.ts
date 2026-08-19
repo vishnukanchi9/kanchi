@@ -7,7 +7,7 @@ export { authConfigured };
 
 if (databaseConfigured && !authConfigured) {
   console.error(
-    "[auth] DATABASE_URL is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
+    "[auth] DATABASE_URL is set but no OAuth provider is configured " +
       "— requireUserId() will reject every request (fail closed) rather than " +
       "share one dev user on a real database.",
   );
@@ -25,33 +25,26 @@ export class UnauthorizedError extends Error {
 
 export type VerifiedUser = { id: string; email: string | null };
 
-export async function getSessionUser(
-  bearerToken?: string,
-): Promise<VerifiedUser | null> {
+export async function getSessionUser(): Promise<VerifiedUser | null> {
   if (!authConfigured) return null;
   const request = getRequest();
   if (!request) return null;
-  let headers = request.headers;
-  if (bearerToken) {
-    headers = new Headers(request.headers);
-    headers.set("Authorization", `Bearer ${bearerToken}`);
-  }
-  const session = await auth.api.getSession({ headers });
+  const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return null;
   return { id: session.user.id, email: session.user.email ?? null };
 }
 
-export async function requireUserId(bearerToken?: string): Promise<string> {
+export async function requireUserId(): Promise<string> {
   if (!authConfigured) {
     if (databaseConfigured) {
       throw new Error(
-        "Auth is disabled (VITE_AUTH_ENABLED=false) but DATABASE_URL is set — " +
+        "No OAuth provider is configured but DATABASE_URL is set — " +
           "refusing to fall back to the shared dev user against a real database.",
       );
     }
     return DEV_USER_ID;
   }
-  const user = await getSessionUser(bearerToken);
+  const user = await getSessionUser();
   if (!user) throw new UnauthorizedError();
   return user.id;
 }

@@ -1,13 +1,8 @@
 /**
- * Upstream identity providers offered for optional sign-in.
+ * Optional sign-in through one OpenID Connect provider.
+ *
+ * Set OAUTH_ISSUER, OAUTH_CLIENT_ID, and OAUTH_CLIENT_SECRET to switch it on.
+ * Until then the labs run as a shared public workspace, which is how nearly
+ * every visitor sees them.
  */
-export type GrokProvider = {
-  providerId: string;
-  idp: string;
-  label: string;
-};
-
-export const GROK_PROVIDERS: readonly GrokProvider[] = [
-  { providerId: "grok-google", idp: "google", label: "Google" },
-  { providerId: "grok-x", idp: "twitter", label: "X" },
-];
+export const OAUTH_PROVIDER_ID = "oidc";

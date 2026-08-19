@@ -30,6 +30,10 @@ npm run typecheck
 npm run build
 ```
 
+No configuration is needed: the labs run against embedded PGLite as a shared
+public workspace. Optional sign-in through any OpenID Connect provider, and the
+optional Postgres connection, are documented in `.env.example`.
+
 ## Contact
 
 - [vishnukanchi9@gmail.com](mailto:vishnukanchi9@gmail.com)

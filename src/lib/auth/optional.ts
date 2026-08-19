@@ -1,17 +1,14 @@
 import { createMiddleware } from "@tanstack/react-start";
 
 /**
- * Optional session — guests share the public demo sandbox; signed-in users
- * get an isolated one. Forwards the live-preview bearer the same way
- * `authMiddleware` does, but never throws on signed-out.
+ * Optional session. Guests share the public demo workspace; signed-in users
+ * get an isolated one. Never throws when signed out — the labs are meant to
+ * work without an account.
  */
-export const optionalAuthMiddleware = createMiddleware({ type: "function" })
-  .client(async ({ next }) => {
-    const { getBearerToken } = await import("./client");
-    return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
-  })
-  .server(async ({ next, context }) => {
+export const optionalAuthMiddleware = createMiddleware({ type: "function" }).server(
+  async ({ next }) => {
     const { getSessionUser } = await import("./verify.server");
-    const user = await getSessionUser(context.bearerToken);
+    const user = await getSessionUser();
     return next({ context: { userId: user?.id ?? "public" } });
-  });
+  },
+);
